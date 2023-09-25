@@ -1,0 +1,7 @@
+courlan
+selenium
+langdetect
+readability
+bs4
+pinecone
+psychopg2
