@@ -5,3 +5,4 @@ readability
 bs4
 pinecone
 psychopg2
+json

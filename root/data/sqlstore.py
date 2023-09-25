@@ -2,9 +2,13 @@ import os
 import psycopg2
 from scrape.script import *
 from datetime import datetime
+import json
 
 #  get DATABASE_URL environment variable
 DATABASE_URL = os.environ['SQL_URL']
+
+### VERIFIED_DOMAIN is the domain that is allowed to be scraped, it is of the form example.com
+VERIFIED_DOMAIN = 'https://something.com'
 
 def url_in_database(url, cur):
     """
