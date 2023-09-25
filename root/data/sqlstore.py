@@ -4,11 +4,7 @@ from scrape.script import *
 from datetime import datetime
 
 #  get DATABASE_URL environment variable
-DATABASE_URL = os.environ['DATABASE_URL']
-PINECONE_API_KEY = os.environ['PINECONE_API_KEY']
-PINECONE_ENV = os.environ['PINECONE_ENV']
-PINECONE_INDEX_NAME = os.environ['PINECONE_INDEX_NAME']
-VERIFIED_DOMAIN = os.environ['VERIFIED_DOMAIN']
+DATABASE_URL = os.environ['SQL_URL']
 
 def url_in_database(url, cur):
     """
