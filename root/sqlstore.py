@@ -8,7 +8,7 @@ import json
 DATABASE_URL = os.environ['SQL_URL']
 
 ### VERIFIED_DOMAIN is the domain that is allowed to be scraped, it is of the form example.com
-VERIFIED_DOMAIN = 'https://something.com'
+VERIFIED_DOMAIN = 'prime.brown.edu'
 
 def url_in_database(url, cur):
     """
