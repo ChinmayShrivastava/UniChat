@@ -11,6 +11,17 @@ chrome_options.add_argument('--headless')
 driver = webdriver.Chrome('chromedriver', options=chrome_options)
 
 # checks if an element contains any anchors, returns a list of links and the associated text
+# def anchorcheck(element):
+#     anchors = element.find_all('a')
+#     if anchors:
+#         anchorlist = []
+#         for anchor in anchors:
+#             if anchor.has_attr('href'):
+#                 anchorlist.append([anchor.get_text(strip=True), anchor['href']])
+#         return anchorlist
+#     else:
+#         return None
+    
 def anchorcheck(element):
     anchors = element.find_all('a')
     if anchors:
@@ -22,7 +33,7 @@ def anchorcheck(element):
     else:
         return None
 
-def contentfinder(url, driver):
+def contentfinder(url, driver, TIMEOUT=10):
 
     ## should be set up in the main script
     # ==========
@@ -35,7 +46,7 @@ def contentfinder(url, driver):
     headers = {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.12; rv:55.0) Gecko/20100101 Firefox/55.0',
     }
-    response = requests.get(url, headers=headers)
+    response = requests.get(url, headers=headers, timeout=TIMEOUT)
     soup = BeautifulSoup(response.text, "html.parser")
 
     # Check if the page uses JavaScript
@@ -74,7 +85,7 @@ def contentfinder(url, driver):
     driver.quit()
 
     # Returns the parsed article content
-    return article, title, lang
+    return article, title, lang, soup
 
 def urlcheck(url, host=None):
     # host = get_host_and_path(url)[0]
@@ -89,17 +100,6 @@ def urlcheck(url, host=None):
         else:
             url = fix_relative_urls(host, url)
             continue
-
-def anchorcheck(element):
-    anchors = element.find_all('a')
-    if anchors:
-        anchorlist = []
-        for anchor in anchors:
-            if anchor.has_attr('href'):
-                anchorlist.append([anchor.get_text(strip=True), anchor['href']])
-        return anchorlist
-    else:
-        return None
 
 def traverse(soup):
 
@@ -298,13 +298,13 @@ def tag_rank(tag, parent_tag):
 
     return idx1 - idx2
 
-def scrape_url(url, driver=driver):
+def scrape_url(url, driver=driver, TIMEOUT=10):
 
     #response = requests.get(url)
     #soup = BeautifulSoup(response.text, "html.parser")
 
     try:
-        soup, title, lang = contentfinder(url, driver)
+        soup, title, lang, rawsoup = contentfinder(url, driver, TIMEOUT=TIMEOUT)
     except Exception as e:
         print(e)
         print(f'failure to scrape {url}')
@@ -314,7 +314,7 @@ def scrape_url(url, driver=driver):
         print(f'failure to scrape {url}: language {lang}')
         return [], ([], [], [])
 
-    anchors = anchorcheck(soup)
+    anchors = anchorcheck(rawsoup)
     anchors = anchors if anchors is not None else []
     urls = []
     host = get_host_and_path(url)[0]

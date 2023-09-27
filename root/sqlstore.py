@@ -3,12 +3,17 @@ import psycopg2
 from scrape.script import *
 from datetime import datetime
 import json
+from dotenv import load_dotenv
+import time
+
+# load environment variables
+load_dotenv()
 
 #  get DATABASE_URL environment variable
 DATABASE_URL = os.environ['SQL_URL']
 
 ### VERIFIED_DOMAIN is the domain that is allowed to be scraped, it is of the form example.com
-VERIFIED_DOMAIN = 'prime.brown.edu'
+VERIFIED_DOMAIN = 'cs.unc.edu'
 
 def url_in_database(url, cur):
     """
@@ -49,6 +54,17 @@ conn.commit()
 # ask for user input for the initial url
 url = input("Enter the initial url: ")
 
+# prompt user to clear the database and start afresh
+clear = input("Clear the database and start afresh? (y/n): ")
+
+# if the user wants to clear the database, clear the database
+if clear == 'y':
+    cur.execute("DELETE FROM urls")
+    cur.execute("DELETE FROM headings")
+    cur.execute("DELETE FROM paragraphs")
+    cur.execute("DELETE FROM urlstoscrape")
+    conn.commit()
+
 # if the url entered is not empty and the url is not already in the database, add it to the database
 if url != "" and not url_in_database(url, cur):
     cur.execute("INSERT INTO urlstoscrape (url, scraped) VALUES (%s, %s)", (url, False))
@@ -66,6 +82,8 @@ paragraphidnext = cur.fetchone()[0]
 i = 0
 while True:
 
+    timeout = 10
+
     print('number of urls scraped :', i)
 
     # get the next url to scrape
@@ -78,7 +96,7 @@ while True:
         url = cur.fetchone()[0]
 
     # scrape the url
-    urls, data = scrape_url(url)
+    urls, data = scrape_url(url, TIMEOUT=timeout)
 
     if len(urls) == 0:
         # mark the url as scraped
@@ -189,61 +207,61 @@ while True:
     print("scraped url : ", url)
     i+=1
 
-# add the column compiledtext to the headings table and update the information
+# # add the column compiledtext to the headings table and update the information
 
-# modify the compiledtext column in headings
-i = 0
+# # modify the compiledtext column in headings
+# i = 0
 
-# select the next heading with compiledtext = ''
-cur.execute("SELECT rowid, headingtext, listofparagraphids, compiledtext FROM headings")
-headings = cur.fetchall()
+# # select the next heading with compiledtext = ''
+# cur.execute("SELECT rowid, headingtext, listofparagraphids, compiledtext FROM headings")
+# headings = cur.fetchall()
 
-def select_row_by_index(index):
-    with conn.cursor() as cur:
-        cur.execute("SELECT * FROM paragraphs LIMIT 1 OFFSET %s", (index - 1,))
-        row = cur.fetchone()
-        return row
+# def select_row_by_index(index):
+#     with conn.cursor() as cur:
+#         cur.execute("SELECT * FROM paragraphs LIMIT 1 OFFSET %s", (index - 1,))
+#         row = cur.fetchone()
+#         return row
 
-for heading in headings:
+# for heading in headings:
 
-    # print(heading)
-    # input()
+#     # print(heading)
+#     # input()
 
-    print(i)
+#     print(i)
 
-    # if heading[-1] != '':
-    #     print(heading, 'already has compiledtext')
-    #     continue
+#     # if heading[-1] != '':
+#     #     print(heading, 'already has compiledtext')
+#     #     continue
 
-    # initialise compiledtext
-    compiledtext = ''
+#     # initialise compiledtext
+#     compiledtext = ''
 
-    # get the heading text
-    compiledtext += heading[1]
+#     # get the heading text
+#     compiledtext += heading[1]
 
-    # load the list of paragraph ids
-    # heading[3] is a string representation of a list of paragraph ids, but it is enclosed in {}, so we remove the first and last characters and then load it as a list
-    listofparagraphids = json.loads('['+heading[2][1:-1]+']')
+#     # load the list of paragraph ids
+#     # heading[3] is a string representation of a list of paragraph ids, but it is enclosed in {}, so we remove the first and last characters and then load it as a list
+#     listofparagraphids = json.loads('['+heading[2][1:-1]+']')
 
-    # get the paragraph texts
-    for paragraphid in listofparagraphids:
-        paragraph = select_row_by_index(paragraphid)
-        if paragraph is not None:
-            # print(paragraph)
-            # input('wait:')
-            compiledtext += ' '
-            compiledtext += paragraph[0]
+#     # get the paragraph texts
+#     for paragraphid in listofparagraphids:
+#         paragraph = select_row_by_index(paragraphid)
+#         if paragraph is not None:
+#             # print(paragraph)
+#             # input('wait:')
+#             compiledtext += ' '
+#             compiledtext += paragraph[0]
 
-    # remove double or more spaces with single spaces
-    compiledtext = ' '.join([word for word in compiledtext.split(' ') if word != ''])
+#     # remove double or more spaces with single spaces
+#     compiledtext = ' '.join([word for word in compiledtext.split(' ') if word != ''])
 
-    print('compiledtext: ', compiledtext)
-    # update the compiledtext column
-    cur.execute("UPDATE headings SET compiledtext = %s WHERE rowid = %s", (compiledtext, heading[0]))
+#     print('compiledtext: ', compiledtext)
+#     # update the compiledtext column
+#     cur.execute("UPDATE headings SET compiledtext = %s WHERE rowid = %s", (compiledtext, heading[0]))
 
-    # save
-    conn.commit()
-    i += 1
+#     # save
+#     conn.commit()
+#     i += 1
 
 # close the cursor
 cur.close()
