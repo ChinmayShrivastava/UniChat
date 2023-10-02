@@ -13,7 +13,7 @@ load_dotenv()
 DATABASE_URL = os.environ['SQL_URL']
 
 ### VERIFIED_DOMAIN is the domain that is allowed to be scraped, it is of the form example.com
-VERIFIED_DOMAIN = 'cs.unc.edu'
+VERIFIED_DOMAIN = 'prime.brown.edu'
 
 def url_in_database(url, cur):
     """
@@ -28,240 +28,257 @@ conn = psycopg2.connect(DATABASE_URL)
 # create a cursor
 cur = conn.cursor()
 
-# if table urls does not exist, create it. The columns that it contains are url, a boolean named verified, and a timestamp named timestamp
-cur.execute("CREATE TABLE IF NOT EXISTS urls (url text, verified boolean, timestamp timestamp)")
+# # if table urls does not exist, create it. The columns that it contains are url, a boolean named verified, and a timestamp named timestamp
+# cur.execute("CREATE TABLE IF NOT EXISTS urls (url text, verified boolean, timestamp timestamp)")
 
-# if table headings does not exist, create it. The columns that it contains are urlid, headingtext, listofsubheadingids, and listofparagraphids, indexed defaults to false
-cur.execute("CREATE TABLE IF NOT EXISTS headings (urlid text, headingtext text, listofsubheadingids text, listofparagraphids text, indexed boolean)")
+# # if table headings does not exist, create it. The columns that it contains are urlid, headingtext, listofsubheadingids, and listofparagraphids, indexed defaults to false
+# cur.execute("CREATE TABLE IF NOT EXISTS headings (urlid text, headingtext text, listofsubheadingids text, listofparagraphids text, indexed boolean)")
 
-# commit the changes
-conn.commit()
+# # commit the changes
+# conn.commit()
 
-# if table paragraphs does not exist, create it. The columns that it contains are paragraphtext
-cur.execute("CREATE TABLE IF NOT EXISTS paragraphs (paragraphtext text)")
+# # if table paragraphs does not exist, create it. The columns that it contains are paragraphtext
+# cur.execute("CREATE TABLE IF NOT EXISTS paragraphs (paragraphtext text)")
 
-# commit the changes
-conn.commit()
+# # commit the changes
+# conn.commit()
 
-# if table urls to scrape doesn't exist, create it. The columns that it contains are url, scraped
-cur.execute("CREATE TABLE IF NOT EXISTS urlstoscrape (url text, scraped boolean)")
+# # if table urls to scrape doesn't exist, create it. The columns that it contains are url, scraped
+# cur.execute("CREATE TABLE IF NOT EXISTS urlstoscrape (url text, scraped boolean)")
 
-# commit the changes
-conn.commit()
+# # commit the changes
+# conn.commit()
 
-# LANGCHAIN scraping logic
+# # LANGCHAIN scraping logic
 
-# ask for user input for the initial url
-url = input("Enter the initial url: ")
+# # ask for user input for the initial url
+# url = input("Enter the initial url: ")
 
-# prompt user to clear the database and start afresh
-clear = input("Clear the database and start afresh? (y/n): ")
+# # prompt user to clear the database and start afresh
+# clear = input("Clear the database and start afresh? (y/n): ")
 
-# if the user wants to clear the database, clear the database
-if clear == 'y':
-    cur.execute("DELETE FROM urls")
-    cur.execute("DELETE FROM headings")
-    cur.execute("DELETE FROM paragraphs")
-    cur.execute("DELETE FROM urlstoscrape")
-    conn.commit()
+# # delete one url
+# delete = input("Delete one url? (y/n): ")
 
-# if the url entered is not empty and the url is not already in the database, add it to the database
-if url != "" and not url_in_database(url, cur):
-    cur.execute("INSERT INTO urlstoscrape (url, scraped) VALUES (%s, %s)", (url, False))
-    conn.commit()
+# # if the user wants to clear the database, clear the database
+# if clear == 'y':
+#     cur.execute("DELETE FROM urls")
+#     cur.execute("DELETE FROM headings")
+#     cur.execute("DELETE FROM paragraphs")
+#     cur.execute("DELETE FROM urlstoscrape")
+#     conn.commit()
 
-# get the next heading id to be added to the headings table, get the length of the headings table
-cur.execute("SELECT COUNT(*) FROM headings")
-headingidnext = cur.fetchone()[0]
+# # if the url entered is not empty and the url is not already in the database, add it to the database
+# if url != "" and not url_in_database(url, cur):
+#     cur.execute("INSERT INTO urlstoscrape (url, scraped) VALUES (%s, %s)", (url, False))
+#     conn.commit()
 
-# get the next paragraph id to be added to the paragraphs table, get the length of the paragraphs table
-cur.execute("SELECT COUNT(*) FROM paragraphs")
-paragraphidnext = cur.fetchone()[0]
+# # get the next heading id to be added to the headings table, get the length of the headings table
+# cur.execute("SELECT COUNT(*) FROM headings")
+# headingidnext = cur.fetchone()[0]
+
+# # get the next paragraph id to be added to the paragraphs table, get the length of the paragraphs table
+# cur.execute("SELECT COUNT(*) FROM paragraphs")
+# paragraphidnext = cur.fetchone()[0]
 
 # while there are still urls to scrape
-i = 0
-while True:
-
-    timeout = 10
-
-    print('number of urls scraped :', i)
-
-    # get the next url to scrape
-    cur.execute("SELECT * FROM urlstoscrape WHERE scraped = %s", (False,))
-
-    if cur.fetchone() is None:
-        break
-    else:
-        cur.execute("SELECT * FROM urlstoscrape WHERE scraped = %s", (False,))
-        url = cur.fetchone()[0]
-
-    # scrape the url
-    urls, data = scrape_url(url, TIMEOUT=timeout)
-
-    if len(urls) == 0:
-        # mark the url as scraped
-        cur.execute("UPDATE urlstoscrape SET scraped = %s WHERE url = %s", (True, url))
-        conn.commit()
-        continue
-
-    # get timestamp
-    timestamp = datetime.now()
-
-    # get the id of the url
-    cur.execute("SELECT COUNT(*) FROM urls")
-    urlid = cur.fetchone()[0]
-
-    headdom = data[1]
-    paradom = data[2]
-
-    if len(headdom) == 0 or len(paradom) == 0:
-        # mark the url as scraped
-        cur.execute("UPDATE urlstoscrape SET scraped = %s WHERE url = %s", (True, url))
-        conn.commit()
-        continue
-
-    print('url is scraped')
-
-    # if url is a page in the VERIFIED_DOMAIN, add it to the urls table and mark it as verified, VERIFIED_DOMAIN is of the form example.com
-    # TODO: this can be optimized
-    if VERIFIED_DOMAIN in url:
-        cur.execute("INSERT INTO urls (url, verified, timestamp) VALUES (%s, %s, %s)", (url, True, timestamp))
-        conn.commit()
-    else:
-        cur.execute("INSERT INTO urls (url, verified, timestamp) VALUES (%s, %s, %s)", (url, False, timestamp))
-        conn.commit()
-
-    # tread with care, RECURSION AHEAD!!!
-    def call_related_headings(headingid, headings, listofrelatedids=None, nextheading=False):
-
-        if listofrelatedids is None:
-            listofrelatedids = []
-
-        if not nextheading:
-            if headings[headingid][3]!=None:
-                subheadingid = headings[headingid][3]
-                listofrelatedids.append(subheadingid)
-                listofrelatedids = call_related_headings(subheadingid, headings, listofrelatedids, True)
-
-        if nextheading:
-            if headings[headingid][4]!=None:
-                nextheadingid = headings[headingid][4]
-                listofrelatedids.append(nextheadingid)
-                listofrelatedids = call_related_headings(nextheadingid, headings, listofrelatedids, True)
-
-        return listofrelatedids
-
-    for headingid_ in range(len(headdom)): # heading is a list of the form [something, something, headingtext, subheadingid, nextheadingid, list of paragraph ids]
-
-        heading_ = headdom[headingid_]
-
-        nextheadingsitem = []
-        nextheadingsitem.append(urlid)
-        nextheadingsitem.append(heading_[2])
-        listofsubheadingids = call_related_headings(headingid_, headdom)
-        nextheadingsitem.append(listofsubheadingids)
-        nextheadingsitem.append(heading_[5])
-        nextheadingsitem.append(False)
-
-        # add the heading to the database, but before that, add headingidnext+1 to each of the subheadingids, and paragraphidnext+1 to each of the paragraphids
-        nextheadingsitem[2] = [headingidnext+1+x for x in nextheadingsitem[2]]
-        nextheadingsitem[3] = [paragraphidnext+1+x for x in nextheadingsitem[3]]
-
-        # add the heading to the database
-        cur.execute("INSERT INTO headings (urlid, headingtext, listofsubheadingids, listofparagraphids, indexed) VALUES (%s, %s, %s, %s, %s)", (nextheadingsitem[0], nextheadingsitem[1], nextheadingsitem[2], nextheadingsitem[3], nextheadingsitem[4]))
-        conn.commit()
-    
-    print('headings are added to the database')
-
-    # increment the headingidnext
-    headingidnext += len(headdom)
-
-    for paragraphid_ in range(len(paradom)): # paragraph is a list of the form [something, something, paragraphtext, something]
-
-        paragraph_ = paradom[paragraphid_]
-
-        nextparagraphitem = []
-        nextparagraphitem.append(paragraph_[2])
-
-        # add the paragraph to the database
-        cur.execute("INSERT INTO paragraphs (paragraphtext) VALUES (%s)", (nextparagraphitem[0],))
-        conn.commit()
-
-    print('paragraphs are added to the database')
-
-    # increment the paragraphidnext
-    paragraphidnext += len(paradom)
-
-    # mark the url as scraped
-    cur.execute("UPDATE urlstoscrape SET scraped = %s WHERE url = %s", (True, url))
-
-    # commit the changes
-    conn.commit()
-
-    # add the urls to the urlstoscrape table if it is a VERIFIED_DOMAIN and if it is not already in the urlstoscrape table
-    for url_ in urls:
-        if VERIFIED_DOMAIN in url_[1] and not url_in_database(url_[1], cur):
-            cur.execute("INSERT INTO urlstoscrape (url, scraped) VALUES (%s, %s)", (url_[1], False))
-            conn.commit()
-    
-    print("scraped url : ", url)
-    i+=1
-
-# # add the column compiledtext to the headings table and update the information
-
-# # modify the compiledtext column in headings
 # i = 0
+# while True:
 
-# # select the next heading with compiledtext = ''
-# cur.execute("SELECT rowid, headingtext, listofparagraphids, compiledtext FROM headings")
-# headings = cur.fetchall()
+#     timeout = 10
+#     print('askdjho')
 
-# def select_row_by_index(index):
-#     with conn.cursor() as cur:
-#         cur.execute("SELECT * FROM paragraphs LIMIT 1 OFFSET %s", (index - 1,))
-#         row = cur.fetchone()
-#         return row
+#     print('number of urls scraped :', i)
 
-# for heading in headings:
+#     # get the next url to scrape
+#     cur.execute("SELECT * FROM urlstoscrape WHERE scraped = %s", (False,))
 
-#     # print(heading)
-#     # input()
+#     if cur.fetchone() is None:
+#         break
+#     else:
+#         # cur.execute("SELECT * FROM urlstoscrape WHERE scraped = %s", (False,))
+#         # select the url where scraped = False and verifier_domain is in the url
+#         cur.execute("SELECT * FROM urlstoscrape WHERE scraped = %s AND url LIKE %s", (False, '%'+VERIFIED_DOMAIN+'%'))
+#         url = cur.fetchone()[0]
+#         if delete:
+#             cur.execute("DELETE FROM urlstoscrape WHERE url = %s", (url,))
+#             conn.commit()
+#             delete = False
+#             continue
 
-#     print(i)
+#     # scrape the url
+#     print(1)
+#     urls, data = scrape_url(url, TIMEOUT=timeout)
+#     print(2)
 
-#     # if heading[-1] != '':
-#     #     print(heading, 'already has compiledtext')
-#     #     continue
+#     if len(urls) == 0:
+#         # mark the url as scraped
+#         cur.execute("UPDATE urlstoscrape SET scraped = %s WHERE url = %s", (True, url))
+#         conn.commit()
+#         continue
 
-#     # initialise compiledtext
-#     compiledtext = ''
+#     # get timestamp
+#     timestamp = datetime.now()
 
-#     # get the heading text
-#     compiledtext += heading[1]
+#     # get the id of the url
+#     cur.execute("SELECT COUNT(*) FROM urls")
+#     urlid = cur.fetchone()[0]
 
-#     # load the list of paragraph ids
-#     # heading[3] is a string representation of a list of paragraph ids, but it is enclosed in {}, so we remove the first and last characters and then load it as a list
-#     listofparagraphids = json.loads('['+heading[2][1:-1]+']')
+#     headdom = data[1]
+#     paradom = data[2]
 
-#     # get the paragraph texts
-#     for paragraphid in listofparagraphids:
-#         paragraph = select_row_by_index(paragraphid)
-#         if paragraph is not None:
-#             # print(paragraph)
-#             # input('wait:')
-#             compiledtext += ' '
-#             compiledtext += paragraph[0]
+#     if len(headdom) == 0 or len(paradom) == 0:
+#         # mark the url as scraped
+#         cur.execute("UPDATE urlstoscrape SET scraped = %s WHERE url = %s", (True, url))
+#         conn.commit()
+#         continue
 
-#     # remove double or more spaces with single spaces
-#     compiledtext = ' '.join([word for word in compiledtext.split(' ') if word != ''])
+#     print('url is scraped')
 
-#     print('compiledtext: ', compiledtext)
-#     # update the compiledtext column
-#     cur.execute("UPDATE headings SET compiledtext = %s WHERE rowid = %s", (compiledtext, heading[0]))
+#     # if url is a page in the VERIFIED_DOMAIN, add it to the urls table and mark it as verified, VERIFIED_DOMAIN is of the form example.com
+#     # TODO: this can be optimized
+#     if VERIFIED_DOMAIN in url:
+#         cur.execute("INSERT INTO urls (url, verified, timestamp) VALUES (%s, %s, %s)", (url, True, timestamp))
+#         conn.commit()
+#     else:
+#         cur.execute("INSERT INTO urls (url, verified, timestamp) VALUES (%s, %s, %s)", (url, False, timestamp))
+#         conn.commit()
 
-#     # save
+#     # tread with care, RECURSION AHEAD!!!
+#     def call_related_headings(headingid, headings, listofrelatedids=None, nextheading=False):
+
+#         if listofrelatedids is None:
+#             listofrelatedids = []
+
+#         if not nextheading:
+#             if headings[headingid][3]!=None:
+#                 subheadingid = headings[headingid][3]
+#                 listofrelatedids.append(subheadingid)
+#                 listofrelatedids = call_related_headings(subheadingid, headings, listofrelatedids, True)
+
+#         if nextheading:
+#             if headings[headingid][4]!=None:
+#                 nextheadingid = headings[headingid][4]
+#                 listofrelatedids.append(nextheadingid)
+#                 listofrelatedids = call_related_headings(nextheadingid, headings, listofrelatedids, True)
+
+#         return listofrelatedids
+
+#     for headingid_ in range(len(headdom)): # heading is a list of the form [something, something, headingtext, subheadingid, nextheadingid, list of paragraph ids]
+
+#         heading_ = headdom[headingid_]
+
+#         nextheadingsitem = []
+#         nextheadingsitem.append(urlid)
+#         nextheadingsitem.append(heading_[2])
+#         listofsubheadingids = call_related_headings(headingid_, headdom)
+#         nextheadingsitem.append(listofsubheadingids)
+#         nextheadingsitem.append(heading_[5])
+#         nextheadingsitem.append(False)
+
+#         # add the heading to the database, but before that, add headingidnext+1 to each of the subheadingids, and paragraphidnext+1 to each of the paragraphids
+#         nextheadingsitem[2] = [headingidnext+1+x for x in nextheadingsitem[2]]
+#         nextheadingsitem[3] = [paragraphidnext+1+x for x in nextheadingsitem[3]]
+
+#         # add the heading to the database
+#         cur.execute("INSERT INTO headings (urlid, headingtext, listofsubheadingids, listofparagraphids, indexed) VALUES (%s, %s, %s, %s, %s)", (nextheadingsitem[0], nextheadingsitem[1], nextheadingsitem[2], nextheadingsitem[3], nextheadingsitem[4]))
+#         conn.commit()
+    
+#     print('headings are added to the database')
+
+#     # increment the headingidnext
+#     headingidnext += len(headdom)
+
+#     for paragraphid_ in range(len(paradom)): # paragraph is a list of the form [something, something, paragraphtext, something]
+
+#         paragraph_ = paradom[paragraphid_]
+
+#         nextparagraphitem = []
+#         nextparagraphitem.append(paragraph_[2])
+
+#         # add the paragraph to the database
+#         cur.execute("INSERT INTO paragraphs (paragraphtext) VALUES (%s)", (nextparagraphitem[0],))
+#         conn.commit()
+
+#     print('paragraphs are added to the database')
+
+#     # increment the paragraphidnext
+#     paragraphidnext += len(paradom)
+
+#     # mark the url as scraped
+#     cur.execute("UPDATE urlstoscrape SET scraped = %s WHERE url = %s", (True, url))
+
+#     # commit the changes
 #     conn.commit()
-#     i += 1
+
+#     # add the urls to the urlstoscrape table if it is a VERIFIED_DOMAIN and if it is not already in the urlstoscrape table
+#     for url_ in urls:
+#         if VERIFIED_DOMAIN in url_[1] and not url_in_database(url_[1], cur):
+#             cur.execute("INSERT INTO urlstoscrape (url, scraped) VALUES (%s, %s)", (url_[1], False))
+#             conn.commit()
+    
+#     print("scraped url : ", url)
+#     i+=1
+
+# add the column compiledtext with a default value to an empty string to the headings table and update the information
+# cur.execute("ALTER TABLE headings ADD COLUMN compiledtext text DEFAULT ''")
+# conn.commit()
+
+# select the next heading with compiledtext = ''
+cur.execute("SELECT rowid, headingtext, listofparagraphids, compiledtext FROM headings")
+headings = cur.fetchall()
+i = 0
+
+def select_row_by_index(index):
+    with conn.cursor() as cur:
+        cur.execute("SELECT * FROM paragraphs LIMIT 1 OFFSET %s", (index - 1,))
+        row = cur.fetchone()
+        return row
+
+for heading in headings:
+
+    # print(heading)
+    # input()
+
+    print(i)
+
+    if heading[-1] != '':
+        i+=1
+        print(heading, 'already has compiledtext')
+        continue
+
+    # initialise compiledtext
+    compiledtext = ''
+
+    # get the heading text
+    try:
+        compiledtext += heading[1]
+    except:
+        pass
+
+    # load the list of paragraph ids
+    # heading[3] is a string representation of a list of paragraph ids, but it is enclosed in {}, so we remove the first and last characters and then load it as a list
+    listofparagraphids = json.loads('['+heading[2][1:-1]+']')
+
+    # get the paragraph texts
+    for paragraphid in listofparagraphids:
+        paragraph = select_row_by_index(paragraphid)
+        if paragraph is not None:
+            # print(paragraph)
+            # input('wait:')
+            compiledtext += ' '
+            compiledtext += paragraph[0]
+
+    # remove double or more spaces with single spaces
+    compiledtext = ' '.join([word for word in compiledtext.split(' ') if word != ''])
+
+    print('compiledtext: ', compiledtext)
+    # update the compiledtext column
+    cur.execute("UPDATE headings SET compiledtext = %s WHERE rowid = %s", (compiledtext, heading[0]))
+
+    # save
+    conn.commit()
+    i += 1
 
 # close the cursor
 cur.close()
