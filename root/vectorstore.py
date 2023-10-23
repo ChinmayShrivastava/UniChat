@@ -76,6 +76,25 @@ def is_copy_url(url):
     # return the url without the hash or queries
     return False, url
 
+def select_row_by_index(index, tablename, columnname, conn):
+    with conn.cursor() as cur:
+        cur.execute(f"SELECT {columnname} FROM {tablename} LIMIT 1 OFFSET %s", (index,))
+        row = cur.fetchone()
+        return row
+
+def get_url_by_headingid(rowid, conn):
+    with conn.cursor() as cur:
+        heading = cur.execute("SELECT urlid FROM headings WHERE rowid = %s", (rowid,))
+        heading = cur.fetchone()
+    url = select_row_by_index(heading[0], 'urls', '*', conn)
+    return url # list of items related to the url
+
+
+def get_heading_by_rowid(rowid, cur): # row id is the same as pineconeid here
+    cur.execute("SELECT * FROM headings WHERE rowid = %s", (rowid,))
+    heading = cur.fetchone()
+    return heading # list of items related to the heading
+
 def embed():
 
     # get all the urls where embedded is false
